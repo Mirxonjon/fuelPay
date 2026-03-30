@@ -1,4 +1,4 @@
-import { PrismaClient, ConnectorStatus, LegalDocumentType, Language, Unit } from '@prisma/client';
+import { PrismaClient, ConnectorStatus, LegalDocumentType, Language, Unit, FuelCategory } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
 
 const prisma = new PrismaClient();
@@ -124,18 +124,19 @@ async function main() {
 
   // Seed Fuel Types
   const fuelTypes = [
-    { name: 'AI-80', octane: '80', unit: Unit.LITRE, picture: 'https://sbhlbjekwivoppvmxyyk.supabase.co/storage/v1/object/public/fuel-types/ai-80.png' },
-    { name: 'AI-92', octane: '92', unit: Unit.LITRE, picture: 'https://sbhlbjekwivoppvmxyyk.supabase.co/storage/v1/object/public/fuel-types/ai-92.png' },
-    { name: 'AI-95', octane: '95', unit: Unit.LITRE, picture: 'https://sbhlbjekwivoppvmxyyk.supabase.co/storage/v1/object/public/fuel-types/ai-95.png' },
-    { name: 'Methane', octane: 'High', unit: Unit.M3, picture: 'https://sbhlbjekwivoppvmxyyk.supabase.co/storage/v1/object/public/fuel-types/methane.png' },
+    { name: 'AI-80', octane: '80', category: FuelCategory.PETROL, unit: Unit.LITRE, picture: 'https://sbhlbjekwivoppvmxyyk.supabase.co/storage/v1/object/public/fuel-types/ai-80.png' },
+    { name: 'AI-92', octane: '92', category: FuelCategory.PETROL, unit: Unit.LITRE, picture: 'https://sbhlbjekwivoppvmxyyk.supabase.co/storage/v1/object/public/fuel-types/ai-92.png' },
+    { name: 'AI-95', octane: '95', category: FuelCategory.PETROL, unit: Unit.LITRE, picture: 'https://sbhlbjekwivoppvmxyyk.supabase.co/storage/v1/object/public/fuel-types/ai-95.png' },
+    { name: 'Methane', octane: 'High', category: FuelCategory.GAS, unit: Unit.M3, picture: 'https://sbhlbjekwivoppvmxyyk.supabase.co/storage/v1/object/public/fuel-types/methane.png' },
+    { name: 'Propane', octane: 'High', category: FuelCategory.PROPANE, unit: Unit.LITRE, picture: 'https://sbhlbjekwivoppvmxyyk.supabase.co/storage/v1/object/public/fuel-types/propane.png' },
   ];
 
   const fuelTypeIds: Record<string, number> = {};
   for (const ft of fuelTypes) {
     const created = await prisma.fuelType.upsert({
       where: { name: ft.name },
-      update: { octane: ft.octane, picture: ft.picture, unit: ft.unit },
-      create: { name: ft.name, octane: ft.octane, picture: ft.picture, unit: ft.unit },
+      update: { octane: ft.octane, picture: ft.picture, unit: ft.unit, category: ft.category },
+      create: { name: ft.name, octane: ft.octane, picture: ft.picture, unit: ft.unit, category: ft.category },
     });
     fuelTypeIds[ft.name] = created.id;
   }
@@ -178,6 +179,23 @@ async function main() {
       workingHours: '24/7',
       pumps: [
         { fuelPumpNumber: 1, fuels: [{ type: 'AI-92', price: 10800 }] },
+      ],
+    },
+    {
+      id: 3, operatorId: 3, title: 'EcoGaz Qoyliq',
+      address: 'Qoyliq District, Tashkent', latitude: 41.2415, longitude: 69.3283,
+      workingHours: '24/7',
+      pumps: [
+        { fuelPumpNumber: 1, fuels: [{ type: 'Methane', price: 3350 }] },
+        { fuelPumpNumber: 2, fuels: [{ type: 'Methane', price: 3350 }] },
+      ],
+    },
+    {
+      id: 4, operatorId: 4, title: 'Propan Energy Sergeli',
+      address: 'Sergeli District, Tashkent', latitude: 41.2222, longitude: 69.2311,
+      workingHours: '08:00 - 22:00',
+      pumps: [
+        { fuelPumpNumber: 1, fuels: [{ type: 'Propane', price: 5500 }, { type: 'AI-80', price: 9500 }] },
       ],
     },
   ];
@@ -229,11 +247,10 @@ async function main() {
   }
   console.log('Fuel stations seeded');
 
-  // Seed Dummy Card for Test User
   if (testUser) {
     const dummyCard = await prisma.card.upsert({
-      where: { userId: testUser.id },
-      update: { token: 'card_dummy_token_123', last4: '4567' },
+      where: { token: 'card_dummy_token_123' },
+      update: { last4: '4567' },
       create: {
         userId: testUser.id,
         token: 'card_dummy_token_123',

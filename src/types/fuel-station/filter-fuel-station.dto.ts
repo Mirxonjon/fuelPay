@@ -9,8 +9,16 @@ import {
   IsString,
   Min,
 } from 'class-validator';
-import { Type } from 'class-transformer';
-import { ConnectorStatus } from '@prisma/client';
+import { Type, Transform } from 'class-transformer';
+import { ConnectorStatus, FuelCategory } from '@prisma/client';
+
+export enum FuelFilterCategory {
+  PETROL = 'PETROL',
+  GAS = 'GAS',
+  PROPANE = 'PROPANE',
+  ELECTRICITY = 'ELECTRICITY',
+  GAS_AND_PROPANE = 'GAS_AND_PROPANE'
+}
 
 export class FilterFuelStationDto {
   @ApiPropertyOptional({ default: 1 })
@@ -100,4 +108,17 @@ export class FilterFuelStationDto {
   @Type(() => Number)
   @IsNumber()
   radiusKm?: number;
+  @ApiPropertyOptional({ enum: FuelFilterCategory })
+  @IsOptional()
+  @Transform(({ value }) => (Array.isArray(value) ? value : value.split(',').map(v => v.trim())))
+  @IsEnum(FuelFilterCategory, { each: true })
+  category?: FuelFilterCategory[];
+
+  @ApiPropertyOptional({ example: ['95'] })
+  @IsOptional()
+  @Transform(({ value }) => (Array.isArray(value) ? value : value.split(',').map(v => v.trim())))
+  @IsString({ each: true })
+  octane?: string[];
 }
+
+

@@ -34,7 +34,7 @@ export class FuelSessionService {
     if (!session || session.paymentId || session.totalAmount <= 0) return;
 
     try {
-      const result = await this.clickService.payWithToken(session.userId, session.totalAmount);
+      const result = await this.clickService.payWithToken(session.userId, undefined, session.totalAmount);
       if (result.success) {
         await this.prisma.fuelSession.update({
           where: { id: sessionId },

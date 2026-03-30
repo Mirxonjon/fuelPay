@@ -215,10 +215,15 @@ export class ClickService {
     }
 
     // 4. PAY WITH SAVED TOKEN
-    async payWithToken(userId: number, amount: number) {
+    async payWithToken(userId: number, cardId: number | undefined, amount: number) {
         if (amount <= 0) throw new BadRequestException('Invalid amount');
 
-        const card = await this.prisma.card.findUnique({ where: { userId } });
+        let card;
+        if (cardId) {
+            card = await this.prisma.card.findFirst({ where: { id: cardId, userId } });
+        } else {
+            card = await this.prisma.card.findFirst({ where: { userId, isActive: true }, orderBy: { createdAt: 'desc' } });
+        }
         if (!card || !card.isActive) {
             throw new BadRequestException('No active card found for user');
         }
@@ -277,11 +282,11 @@ export class ClickService {
     }
 
     async getSavedCards(userId: number) {
-        const card = await this.prisma.card.findUnique({
+        const cards = await this.prisma.card.findMany({
             where: { userId, isActive: true },
             select: { id: true, last4: true, createdAt: true },
         });
-        return card ? [card] : [];
+        return cards;
     }
 
     // 5. DELETE SAVED CARD

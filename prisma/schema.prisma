@@ -26,6 +26,13 @@ enum Unit {
   KG
 }
 
+enum FuelCategory {
+  PETROL
+  GAS
+  PROPANE
+  ELECTRICITY
+}
+
 model Role {
   id    Int    @id @default(autoincrement())
   name  String @unique
@@ -49,7 +56,7 @@ model User {
   fuelSessions        FuelSession[]
   resetTokens         PasswordResetToken[]
   registrationTokens  RegistrationToken[]
-  card                Card?
+  cards               Card[]
   paymentTransactions PaymentTransaction[]
   fuelStationLikes    FuelStationLike[]
   Notification        Notification[]
@@ -222,7 +229,8 @@ model FuelType {
   id        Int      @id @default(autoincrement())
   name      String   @unique
   octane    String?
-  unit      Unit     @default(LITRE)
+  unit      Unit         @default(LITRE)
+  category  FuelCategory @default(PETROL)
   picture   String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -417,7 +425,7 @@ model UserDevice {
 
 model Card {
   id        Int      @id @default(autoincrement())
-  userId    Int      @unique
+  userId    Int
   user      User     @relation(fields: [userId], references: [id])
   token     String   @unique
   last4     String // e.g. 3456

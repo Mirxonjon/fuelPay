@@ -55,7 +55,7 @@ export class ClickController {
     @ApiOperation({ summary: 'Directly pay for fueling using the saved card' })
     async payWithToken(@Req() req: Request, @Body() dto: PayWithTokenDto) {
         const userId = (req as any).user.sub;
-        return this.clickService.payWithToken(userId, dto.amount);
+        return this.clickService.payWithToken(userId, dto.cardId, dto.amount);
     }
 
     @Delete('cards/:id')

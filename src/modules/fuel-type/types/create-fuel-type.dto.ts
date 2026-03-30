@@ -1,6 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { IsString, IsNotEmpty, IsOptional, IsInt, IsEnum } from 'class-validator';
-import { Unit } from '@prisma/client';
+import { Unit, FuelCategory } from '@prisma/client';
 
 export class CreateFuelTypeDto {
   @ApiProperty({
@@ -26,6 +26,15 @@ export class CreateFuelTypeDto {
   })
   @IsEnum(Unit)
   unit: Unit;
+
+  @ApiPropertyOptional({
+    description: 'Category of the fuel type',
+    enum: FuelCategory,
+    example: FuelCategory.PETROL,
+  })
+  @IsOptional()
+  @IsEnum(FuelCategory)
+  category?: FuelCategory;
 
   @ApiPropertyOptional({
     description: 'Picture URL of the fuel type',

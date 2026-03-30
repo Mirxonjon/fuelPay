@@ -32,7 +32,10 @@ export class VerifyCardDto {
 }
 
 export class PayWithTokenDto {
-    // cardId removed - each user has exactly one active card @unique
+    @ApiProperty({ description: 'Card ID to use for payment', example: 1 })
+    @IsNotEmpty()
+    @IsNumber()
+    cardId: number;
 
 
     @ApiProperty({ description: 'Amount to pay in UZS', example: 50000 })

@@ -31,6 +31,8 @@ export class FuelStationService {
       lat,
       lng,
       radiusKm,
+      category,
+      octane,
     } = query;
 
     const where: any = {};
@@ -51,7 +53,7 @@ export class FuelStationService {
       if (to) where.createdAt.lte = new Date(to);
     }
 
-    if (fuelType_id || pumpStatus || minPrice !== undefined || maxPrice !== undefined) {
+    if (fuelType_id || pumpStatus || minPrice !== undefined || maxPrice !== undefined || category || octane) {
       where.fuelPumps = {
         some: {},
       };
@@ -60,13 +62,28 @@ export class FuelStationService {
         where.fuelPumps.some.status = pumpStatus;
       }
 
-      if (fuelType_id || minPrice !== undefined || maxPrice !== undefined) {
+      if (fuelType_id || minPrice !== undefined || maxPrice !== undefined || category || octane) {
         where.fuelPumps.some.fuels = {
           some: {},
         };
 
         if (fuelType_id) {
           where.fuelPumps.some.fuels.some.fuelTypeId = fuelType_id;
+        }
+
+        if (category || octane) {
+          where.fuelPumps.some.fuels.some.fuelType = {};
+          if (category) {
+            let catArr: string[] = Array.isArray(category) ? [...category] as string[] : [category] as string[];
+            if (catArr.includes('GAS_AND_PROPANE')) {
+              catArr = catArr.filter((c: string) => c !== 'GAS_AND_PROPANE');
+              catArr.push('GAS', 'PROPANE');
+            }
+            where.fuelPumps.some.fuels.some.fuelType.category = { in: catArr as any };
+          }
+          if (octane) {
+            where.fuelPumps.some.fuels.some.fuelType.octane = { in: Array.isArray(octane) ? octane : [octane] };
+          }
         }
 
         if (minPrice !== undefined || maxPrice !== undefined) {

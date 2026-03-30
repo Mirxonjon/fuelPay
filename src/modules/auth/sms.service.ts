@@ -141,7 +141,7 @@ export class SmsService {
    * @param code  OTP code string e.g. "123456"
    */
   async sendOtp(phone: string, code: string): Promise<boolean> {
-    const message = `Charge One ilovasiga kirish uchun kod - ${code}`;
+    const message = `Fuel Pay ilovasiga kirish uchun kod - ${code}`;
     return this.sendSms(phone, message);
   }
 }
