@@ -117,6 +117,7 @@ export class FuelStationService {
                     picture: true,
                     octane: true,
                     unit: true,
+                    category:true
                   },
                 },
               },
