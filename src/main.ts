@@ -50,7 +50,7 @@ async function bootstrap() {
 
   useContainer(app.select(AppModule), { fallbackOnErrors: true });
 
-  await app.listen(appConfig.port).then(() => {
+  await app.listen(appConfig.port, appConfig.host).then(() => {
     console.log(`API: http://${appConfig.host}:${appConfig.port}`);
     console.log(`DOCS: http://${appConfig.host}:${appConfig.port}/docs`);
     console.log(`CORS ORIGIN: [${corsOrigin}]`);
