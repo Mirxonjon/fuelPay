@@ -23,6 +23,7 @@ import { SetPasswordDto } from '@/types/auth/set-password.dto';
 import { AdminCreateDto } from '@/types/auth/admin-create.dto';
 import { AdminLoginDto } from '@/types/auth/admin-login.dto';
 import { UpdateCashierDto } from '@/types/auth/update-cashier.dto';
+import { CreateCashierDto } from '@/types/auth/create-cashier.dto';
 
 const ACCESS_EXPIRES_SECONDS = (() => {
   const v = process.env.ACCESS_TOKEN_TTL || '15m';
@@ -396,6 +397,9 @@ export class AuthService {
         isVerified: true,
         createdAt: true,
         role: { select: { name: true } },
+        cashierStations: {
+          select: { id: true, title: true, address: true, latitude: true, longitude: true },
+        },
       },
     });
     if (!user) return null as any;
@@ -408,7 +412,39 @@ export class AuthService {
       isVerified: user.isVerified,
       role: user.role?.name,
       createdAt: user.createdAt,
+      stations: user.cashierStations?.length > 0 ? user.cashierStations : undefined,
     };
+  }
+
+  async getMyCashierStations(userId: number) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      include: {
+        role: { select: { name: true } },
+        cashierStations: {
+          select: {
+            id: true,
+            title: true,
+            address: true,
+            latitude: true,
+            longitude: true,
+            isActive: true,
+            workingHours: true,
+            operator: { select: { id: true, title: true } },
+            fuelPumps: {
+              select: {
+                id: true,
+                fuelPumpNumber: true,
+                status: true,
+              },
+            },
+          },
+        },
+      },
+    });
+    if (!user) throw new BadRequestException('User not found');
+    if (user.role?.name !== 'CASHIER') throw new BadRequestException('User is not a cashier');
+    return user.cashierStations;
   }
 
   async updateMe(userId: number, dto: any) {
@@ -442,7 +478,7 @@ export class AuthService {
     return { id: user.id, phone: user.phone };
   }
   
-  async createCashier(dto: AdminCreateDto) {
+  async createCashier(dto: CreateCashierDto) {
     const existing = await this.prisma.user.findUnique({
       where: { phone: dto.phone },
     });
@@ -458,9 +494,13 @@ export class AuthService {
         lastName: dto.lastName,
         isVerified: true,
         roleId: role.id,
+        ...(dto.stationIds && dto.stationIds.length > 0
+          ? { cashierStations: { connect: dto.stationIds.map((id) => ({ id })) } }
+          : {}),
       },
+      include: { cashierStations: { select: { id: true, title: true } } },
     });
-    return { id: user.id, phone: user.phone, role: 'CASHIER' };
+    return { id: user.id, phone: user.phone, role: 'CASHIER', stations: user.cashierStations };
   }
 
   async updateCashier(id: number, dto: UpdateCashierDto) {
@@ -477,6 +517,9 @@ export class AuthService {
     if (dto.firstName !== undefined) data.firstName = dto.firstName;
     if (dto.lastName !== undefined) data.lastName = dto.lastName;
     if (dto.password !== undefined) data.password = await bcrypt.hash(dto.password, 12);
+    if (dto.stationIds !== undefined) {
+      data.cashierStations = { set: dto.stationIds.map((sid) => ({ id: sid })) };
+    }
 
     await this.prisma.user.update({ where: { id }, data });
     return { id, message: 'Cashier updated successfully' };

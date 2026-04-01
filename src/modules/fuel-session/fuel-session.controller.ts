@@ -81,6 +81,16 @@ export class FuelSessionController {
     return this.service.adminCreate(dto);
   }
 
+  // USER get own stats (total fuel consumption summary)
+  @Get('my-stats')
+  @ApiOperation({
+    summary: 'Get current user fuel consumption statistics (totals by fuel type, unit, category)',
+  })
+  getMyStats(@Req() req: Request) {
+    const userId = (req as any).user.sub as number;
+    return this.service.getUserStats(userId);
+  }
+
   // USER list own
   @Get()
   @ApiOperation({ summary: 'List own fuel sessions (USER)' })
@@ -97,6 +107,7 @@ export class FuelSessionController {
     const userId = (req as any).user.sub as number;
     return this.service.findAllForUser(userId, query);
   }
+
 
   // ADMIN list all
   @Get('admin')

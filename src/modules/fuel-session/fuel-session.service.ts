@@ -200,6 +200,89 @@ export class FuelSessionService {
     return { success: true };
   }
 
+  async getUserStats(userId: number) {
+    // Fetch all COMPLETED sessions for the user, newest first
+    const sessions = await this.prisma.fuelSession.findMany({
+      where: { userId, status: SessionStatus.COMPLETED },
+      orderBy: { startTime: 'desc' },
+      include: {
+        fuelType: { select: { name: true, unit: true, category: true } },
+        fuelStation: { select: { id: true, title: true, address: true } },
+      },
+    });
+
+    // Aggregate by unit (raw)
+    const totalByUnit: Record<string, number> = {};
+    // Aggregate by fuel category
+    const totalByCategory: Record<string, { quantity: number; unit: string }> = {};
+    // Aggregate by fuel type name
+    const totalByFuelType: Record<string, { quantity: number; unit: string; totalAmount: number }> = {};
+    // Total money spent
+    let totalAmount = 0;
+
+    for (const s of sessions) {
+      const unit = s.fuelType?.unit ?? s.unit ?? 'LITRE';
+      const category = s.fuelType?.category ?? 'PETROL';
+      const typeName = s.fuelType?.name ?? 'Unknown';
+
+      // raw by unit
+      totalByUnit[unit] = (totalByUnit[unit] ?? 0) + s.quantity;
+
+      // by category with its unit
+      if (!totalByCategory[category]) {
+        totalByCategory[category] = { quantity: 0, unit };
+      }
+      totalByCategory[category].quantity += s.quantity;
+
+      // by fuel type name
+      if (!totalByFuelType[typeName]) {
+        totalByFuelType[typeName] = { quantity: 0, unit, totalAmount: 0 };
+      }
+      totalByFuelType[typeName].quantity += s.quantity;
+      totalByFuelType[typeName].totalAmount += s.totalAmount;
+
+      totalAmount += s.totalAmount;
+    }
+
+    return {
+      sessionCount: sessions.length,
+      totalAmount,
+      // PETROL category: AI-80, AI-92, AI-95 — LITRE
+      totalPetrolLitres: totalByCategory['PETROL']?.quantity ?? 0,
+      // GAS category: Methane — M3
+      totalGasM3: totalByCategory['GAS']?.quantity ?? 0,
+      // PROPANE category: Propane — LITRE (separate from petrol)
+      totalPropaneLitres: totalByCategory['PROPANE']?.quantity ?? 0,
+      // ELECTRICITY category: — KWH
+      totalKwh: totalByCategory['ELECTRICITY']?.quantity ?? 0,
+      byUnit: totalByUnit,
+      byCategory: Object.fromEntries(
+        Object.entries(totalByCategory).map(([cat, val]) => [
+          cat,
+          { quantity: val.quantity, unit: val.unit },
+        ]),
+      ),
+      byFuelType: totalByFuelType,
+      // individual sessions — where, when, how much
+      sessions: sessions.map((s) => ({
+        id: s.id,
+        station: s.fuelStation
+          ? { id: s.fuelStation.id, title: s.fuelStation.title, address: s.fuelStation.address }
+          : null,
+        fuelType: s.fuelType?.name ?? null,
+        category: s.fuelType?.category ?? null,
+        quantity: s.quantity,
+        unit: s.fuelType?.unit ?? s.unit,
+        pricePerUnit: s.pricePerUnit,
+        totalAmount: s.totalAmount,
+        startTime: s.startTime,
+        endTime: s.endTime,
+      })),
+    };
+  }
+
+
+
   async confirmSession(id: number, paymentId?: number) {
     const session = await this.adminFindOne(id);
     if (session.status !== SessionStatus.PENDING) {

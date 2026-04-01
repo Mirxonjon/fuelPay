@@ -247,6 +247,35 @@ async function main() {
   }
   console.log('Fuel stations seeded');
 
+  // Seed default Cashier user and assign stations
+  const defaultCashierPhone = '+998900000002';
+  const defaultCashierPassword = 'Cashier123!';
+  let cashierUser = await prisma.user.findUnique({
+    where: { phone: defaultCashierPhone },
+  });
+  if (!cashierUser) {
+    const hash = await bcrypt.hash(defaultCashierPassword, 12);
+    cashierUser = await prisma.user.create({
+      data: {
+        phone: defaultCashierPhone,
+        password: hash,
+        isVerified: true,
+        roleId: cashierRole.id,
+        firstName: 'Default',
+        lastName: 'Cashier',
+        cashierStations: {
+          connect: [
+            { id: 1 },
+            { id: 2 },
+          ],
+        },
+      },
+    });
+    console.log('Default cashier created and assigned to stations 1 & 2');
+  } else {
+    console.log('Default cashier already exists');
+  }
+
   if (testUser) {
     const dummyCard = await prisma.card.upsert({
       where: { token: 'card_dummy_token_123' },
@@ -277,7 +306,104 @@ async function main() {
     console.log('Test user card and car seeded');
   }
 
+  // ── Mock user 987654321 with test fuel sessions ──────────────────────────
+  const mockUserPhone = '+998987654321';
+  const mockUserPassword = 'User123!';
+  let mockUser = await prisma.user.findUnique({ where: { phone: mockUserPhone } });
+  if (!mockUser) {
+    const hash = await bcrypt.hash(mockUserPassword, 12);
+    mockUser = await prisma.user.create({
+      data: {
+        phone: mockUserPhone,
+        password: hash,
+        isVerified: true,
+        roleId: userRole.id,
+        firstName: 'Mirzo',
+        lastName: 'Toshmatov',
+      },
+    });
+    console.log('Mock user 987654321 created');
+  } else {
+    console.log('Mock user 987654321 already exists');
+  }
+
+  // Seed test fuel sessions for mock user (only if none exist)
+  const existingSessions = await prisma.fuelSession.count({ where: { userId: mockUser.id } });
+  if (existingSessions === 0) {
+    // Resolve fuel type IDs
+    const ai92 = await prisma.fuelType.findUnique({ where: { name: 'AI-92' } });
+    const ai95 = await prisma.fuelType.findUnique({ where: { name: 'AI-95' } });
+    const methane = await prisma.fuelType.findUnique({ where: { name: 'Methane' } });
+    const propane = await prisma.fuelType.findUnique({ where: { name: 'Propane' } });
+
+    // Station 1 – pump 1 (AI-80, AI-92), pump 2 (AI-95)
+    // Station 3 – pump 1 & 2 (Methane)
+    // Station 4 – pump 1 (Propane, AI-80)
+    const pump1s1 = await prisma.fuelPump.findUnique({ where: { stationId_fuelPumpNumber: { stationId: 1, fuelPumpNumber: 1 } } }); // AI-92
+    const pump2s1 = await prisma.fuelPump.findUnique({ where: { stationId_fuelPumpNumber: { stationId: 1, fuelPumpNumber: 2 } } }); // AI-95
+    const pump1s3 = await prisma.fuelPump.findUnique({ where: { stationId_fuelPumpNumber: { stationId: 3, fuelPumpNumber: 1 } } }); // Methane
+    const pump1s4 = await prisma.fuelPump.findUnique({ where: { stationId_fuelPumpNumber: { stationId: 4, fuelPumpNumber: 1 } } }); // Propane
+
+    const now = new Date();
+    const daysAgo = (n: number) => new Date(now.getTime() - n * 24 * 60 * 60 * 1000);
+
+    const sessionsData: any[] = [];
+
+    // Benzin (AI-92) sessions – 5 sessions
+    if (ai92 && pump1s1) {
+      sessionsData.push(
+        { fuelTypeId: ai92.id, fuelPumpId: pump1s1.id, fuelStationId: 1, unit: 'LITRE', quantity: 30, pricePerUnit: 10500, startTime: daysAgo(2) },
+        { fuelTypeId: ai92.id, fuelPumpId: pump1s1.id, fuelStationId: 1, unit: 'LITRE', quantity: 25, pricePerUnit: 10500, startTime: daysAgo(10) },
+        { fuelTypeId: ai92.id, fuelPumpId: pump1s1.id, fuelStationId: 1, unit: 'LITRE', quantity: 20, pricePerUnit: 10500, startTime: daysAgo(20) },
+      );
+    }
+    // Benzin (AI-95) sessions
+    if (ai95 && pump2s1) {
+      sessionsData.push(
+        { fuelTypeId: ai95.id, fuelPumpId: pump2s1.id, fuelStationId: 1, unit: 'LITRE', quantity: 35, pricePerUnit: 12500, startTime: daysAgo(5) },
+        { fuelTypeId: ai95.id, fuelPumpId: pump2s1.id, fuelStationId: 1, unit: 'LITRE', quantity: 15, pricePerUnit: 12500, startTime: daysAgo(15) },
+      );
+    }
+    // Gaz (Methane) sessions
+    if (methane && pump1s3) {
+      sessionsData.push(
+        { fuelTypeId: methane.id, fuelPumpId: pump1s3.id, fuelStationId: 3, unit: 'M3', quantity: 20, pricePerUnit: 3350, startTime: daysAgo(3) },
+        { fuelTypeId: methane.id, fuelPumpId: pump1s3.id, fuelStationId: 3, unit: 'M3', quantity: 15, pricePerUnit: 3350, startTime: daysAgo(12) },
+        { fuelTypeId: methane.id, fuelPumpId: pump1s3.id, fuelStationId: 3, unit: 'M3', quantity: 10, pricePerUnit: 3350, startTime: daysAgo(25) },
+      );
+    }
+    // Propane sessions
+    if (propane && pump1s4) {
+      sessionsData.push(
+        { fuelTypeId: propane.id, fuelPumpId: pump1s4.id, fuelStationId: 4, unit: 'LITRE', quantity: 40, pricePerUnit: 5500, startTime: daysAgo(7) },
+        { fuelTypeId: propane.id, fuelPumpId: pump1s4.id, fuelStationId: 4, unit: 'LITRE', quantity: 30, pricePerUnit: 5500, startTime: daysAgo(18) },
+      );
+    }
+
+    for (const sd of sessionsData) {
+      await prisma.fuelSession.create({
+        data: {
+          userId: mockUser.id,
+          fuelStationId: sd.fuelStationId,
+          fuelPumpId: sd.fuelPumpId,
+          fuelTypeId: sd.fuelTypeId,
+          unit: sd.unit,
+          quantity: sd.quantity,
+          pricePerUnit: sd.pricePerUnit,
+          totalAmount: sd.quantity * sd.pricePerUnit,
+          status: 'COMPLETED',
+          startTime: sd.startTime,
+          endTime: new Date(sd.startTime.getTime() + 10 * 60 * 1000), // +10 min
+        },
+      });
+    }
+    console.log(`Mock user 987654321: ${sessionsData.length} fuel sessions created`);
+  } else {
+    console.log('Mock user 987654321 fuel sessions already exist');
+  }
+
   // Seed Legal Documents
+
   console.log('Seeding Legal Documents...');
 
   // 1. Privacy Policy

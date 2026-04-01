@@ -8,6 +8,7 @@ import { Request } from 'express';
 import { AuthService } from './auth.service';
 import { AdminCreateDto } from '@/types/auth/admin-create.dto';
 import { AdminLoginDto } from '@/types/auth/admin-login.dto';
+import { CreateCashierDto } from '@/types/auth/create-cashier.dto';
 import { UpdateCashierDto } from '@/types/auth/update-cashier.dto';
 
 @ApiTags('Admin')
@@ -32,8 +33,8 @@ export class AdminController {
   @ApiBearerAuth()
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Create cashier user (ADMIN only)' })
-  @ApiBody({ type: AdminCreateDto })
-  createCashier(@Body() dto: AdminCreateDto) {
+  @ApiBody({ type: CreateCashierDto })
+  createCashier(@Body() dto: CreateCashierDto) {
     return this.authService.createCashier(dto);
   }
 

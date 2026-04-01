@@ -36,6 +36,7 @@ import { RolesGuard } from './guards/roles.guard';
 import { RegisterDto } from '@/types/auth/register.dto';
 import { SetPasswordDto } from '@/types/auth/set-password.dto';
 
+
 @ApiTags('Auth')
 @Controller('auth')
 export class AuthController {
@@ -164,6 +165,17 @@ export class AuthController {
   updateMe(@Req() req: any, @Body() dto: UpdateMeDto): Promise<MeResponseDto> {
     const userId = req.user.sub as number;
     return this.authService.updateMe(userId, dto);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('CASHIER')
+  @ApiBearerAuth()
+  @Get('my-stations')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Get stations assigned to the current cashier (CASHIER only)' })
+  myCashierStations(@Req() req: any) {
+    const userId = req.user.sub as number;
+    return this.authService.getMyCashierStations(userId);
   }
 
   // @Public()

@@ -61,6 +61,7 @@ model User {
   fuelStationLikes    FuelStationLike[]
   Notification        Notification[]
   UserDevice          UserDevice[]
+  cashierStations     FuelStation[]        @relation("CashierStation")
   createdAt           DateTime             @default(now())
   updatedAt           DateTime             @updatedAt
 }
@@ -203,8 +204,9 @@ model FuelStation {
   fuelPumps        FuelPump[]
   fuelStationLikes FuelStationLike[]
   fuelSessions     FuelSession[]
-  createdAt        DateTime          @default(now())
-  updatedAt        DateTime          @updatedAt
+  cashiers         User[]              @relation("CashierStation")
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
 
   @@index([operatorId])
 }
