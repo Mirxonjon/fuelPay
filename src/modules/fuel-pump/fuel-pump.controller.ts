@@ -10,13 +10,13 @@ import { FilterFuelPumpDto } from '@/types/fuel-pump/filter-fuel-pump.dto';
 
 @ApiTags('FuelPump')
 @ApiBearerAuth()
-// @UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('pumps')
 export class FuelPumpController {
   constructor(private readonly service: FuelPumpService) { }
 
   @Post()
-  @Roles('ADMIN')
+  // @Roles('ADMIN')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Create fuel pump (ADMIN)' })
   @ApiBody({ type: CreateFuelPumpDto })
@@ -43,14 +43,14 @@ export class FuelPumpController {
   }
 
   @Patch(':id')
-  @Roles('ADMIN')
+  // @Roles('ADMIN')
   @ApiOperation({ summary: 'Update fuel pump (ADMIN)' })
   update(@Param('id', ParseIntPipe) id: number, @Body() dto: UpdateFuelPumpDto) {
     return this.service.update(id, dto);
   }
 
   @Delete(':id')
-  @Roles('ADMIN')
+  // @Roles('ADMIN')
   @ApiOperation({ summary: 'Delete fuel pump (ADMIN)' })
   remove(@Param('id', ParseIntPipe) id: number) {
     return this.service.remove(id);

@@ -6,7 +6,7 @@ import { FilterFuelPumpFuelDto } from '@/types/fuel-pump-fuel/filter-fuel-pump-f
 
 @Injectable()
 export class FuelPumpFuelService {
-  constructor(private prisma: PrismaService) {}
+  constructor(private prisma: PrismaService) { }
 
   async create(dto: CreateFuelPumpFuelDto) {
     return this.prisma.fuelPumpFuel.create({ data: dto });
@@ -21,6 +21,34 @@ export class FuelPumpFuelService {
       this.prisma.fuelPumpFuel.findMany({
         where,
         orderBy: { createdAt: 'desc' },
+        select: {
+          id: true,
+          fuelPumpId: true,
+          fuelTypeId: true,
+          price: true,
+          createdAt: true,
+          updatedAt: true,
+          fuelPump: {
+            select: {
+              id: true,
+              fuelPumpNumber: true,
+              status: true,
+              stationId: true,
+            }
+          },
+          fuelType: {
+            select: {
+              id: true,
+              name: true,
+              octane: true,
+              unit: true,
+              category: true,
+              picture: true,
+              createdAt: true,
+              updatedAt: true,
+            }
+          }
+        },
         skip: (page - 1) * limit,
         take: limit,
       }),
