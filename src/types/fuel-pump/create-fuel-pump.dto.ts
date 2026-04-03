@@ -22,4 +22,8 @@ export class CreateFuelPumpDto {
   @Type(() => Number)
   @IsNumber()
   fuelPumpNumber: number;
+
+  @ApiPropertyOptional({ description: 'Optional QR code token' })
+  @IsOptional()
+  qrCode?: string;
 }

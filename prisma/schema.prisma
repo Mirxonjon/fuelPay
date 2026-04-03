@@ -220,11 +220,13 @@ model FuelPump {
   fuels          FuelPumpFuel[]
   fuelSessions   FuelSession[]
   statusLogs     FuelPumpStatusLog[]
+  qrCode         String?             @unique
   createdAt      DateTime            @default(now())
   updatedAt      DateTime            @updatedAt
 
   @@unique([stationId, fuelPumpNumber])
   @@index([stationId])
+  @@index([qrCode])
 }
 
 model FuelType {

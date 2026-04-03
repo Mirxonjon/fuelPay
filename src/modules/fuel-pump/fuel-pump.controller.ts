@@ -1,4 +1,5 @@
-import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, ParseIntPipe, Patch, Post, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Header, HttpCode, HttpStatus, Param, ParseIntPipe, Patch, Post, Query, Res, UseGuards } from '@nestjs/common';
+import { Response } from 'express';
 import { ApiBearerAuth, ApiBody, ApiOperation, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { FuelPumpService } from './fuel-pump.service';
 import { JwtAuthGuard } from '@/modules/auth/guards/jwt-auth.guard';
@@ -54,5 +55,20 @@ export class FuelPumpController {
   @ApiOperation({ summary: 'Delete fuel pump (ADMIN)' })
   remove(@Param('id', ParseIntPipe) id: number) {
     return this.service.remove(id);
+  }
+
+  @Get(':id/qr-code')
+  @ApiOperation({ summary: 'Download QR code image for a pump' })
+  @Header('Content-Type', 'image/png')
+  @Header('Content-Disposition', 'attachment; filename=qr-code.png')
+  async getQrCode(@Param('id', ParseIntPipe) id: number, @Res() res: Response) {
+    const buffer = await this.service.generateQrCodeImage(id);
+    res.send(buffer);
+  }
+
+  @Get('scan/:qrCode')
+  @ApiOperation({ summary: 'Scan QR code and get pump details (Mobile App)' })
+  async scan(@Param('qrCode') qrCode: string) {
+    return this.service.findByQrCode(qrCode);
   }
 }

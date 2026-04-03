@@ -4,12 +4,17 @@ import { CreateFuelPumpDto } from '@/types/fuel-pump/create-fuel-pump.dto';
 import { UpdateFuelPumpDto } from '@/types/fuel-pump/update-fuel-pump.dto';
 import { FilterFuelPumpDto } from '@/types/fuel-pump/filter-fuel-pump.dto';
 import { ConnectorStatus } from '@prisma/client';
+import * as QRCode from 'qrcode';
+import { v4 as uuidv4 } from 'uuid';
 
 @Injectable()
 export class FuelPumpService {
   constructor(private prisma: PrismaService) { }
 
   async create(dto: CreateFuelPumpDto) {
+    if (!dto.qrCode) {
+      dto.qrCode = uuidv4();
+    }
     return this.prisma.fuelPump.create({ data: dto });
   }
 
@@ -48,5 +53,36 @@ export class FuelPumpService {
     await this.findOne(id);
     await this.prisma.fuelPump.delete({ where: { id } });
     return { success: true };
+  }
+
+  async findByQrCode(qrCode: string) {
+    const item = await this.prisma.fuelPump.findUnique({
+      where: { qrCode },
+      include: {
+        fuelStation: true,
+        fuels: {
+          include: {
+            fuelType: true,
+          },
+        },
+      },
+    });
+    if (!item) throw new NotFoundException('Fuel pump not found by QR code');
+    return item;
+  }
+
+  async generateQrCodeImage(id: number): Promise<Buffer> {
+    const pump = await this.findOne(id);
+    if (!pump.qrCode) {
+      // If for some reason it doesn't have a QR code, generate one now
+      const updated = await this.prisma.fuelPump.update({
+        where: { id },
+        data: { qrCode: uuidv4() },
+      });
+      pump.qrCode = updated.qrCode;
+    }
+
+    // Return the QR code as a PNG buffer
+    return QRCode.toBuffer(pump.qrCode);
   }
 }
