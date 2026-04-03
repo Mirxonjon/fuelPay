@@ -30,7 +30,13 @@ export class FuelPumpService {
         orderBy: { [sortBy]: sortOrder },
         skip: (page - 1) * limit,
         take: limit,
-        include: { fuelStation: true },
+        include: {
+          fuelStation: {
+            include: {
+              operator: true,
+            },
+          },
+        },
       }),
       this.prisma.fuelPump.count({ where }),
     ]);
@@ -39,7 +45,21 @@ export class FuelPumpService {
   }
 
   async findOne(id: number) {
-    const item = await this.prisma.fuelPump.findUnique({ where: { id } });
+    const item = await this.prisma.fuelPump.findUnique({
+      where: { id },
+      include: {
+        fuelStation: {
+          include: {
+            operator: true,
+          },
+        },
+        fuels: {
+          include: {
+            fuelType: true,
+          },
+        },
+      },
+    });
     if (!item) throw new NotFoundException('Fuel pump not found');
     return item;
   }
@@ -59,7 +79,11 @@ export class FuelPumpService {
     const item = await this.prisma.fuelPump.findUnique({
       where: { qrCode },
       include: {
-        fuelStation: true,
+        fuelStation: {
+          include: {
+            operator: true,
+          },
+        },
         fuels: {
           include: {
             fuelType: true,
@@ -73,16 +97,17 @@ export class FuelPumpService {
 
   async generateQrCodeImage(id: number): Promise<Buffer> {
     const pump = await this.findOne(id);
-    if (!pump.qrCode) {
-      // If for some reason it doesn't have a QR code, generate one now
-      const updated = await this.prisma.fuelPump.update({
+    // TypeScript might think qrCode is optionally missing even if it's in the DB
+    const qrToken = (pump as any).qrCode || uuidv4();
+    
+    if (!(pump as any).qrCode) {
+      await this.prisma.fuelPump.update({
         where: { id },
-        data: { qrCode: uuidv4() },
+        data: { qrCode: qrToken },
       });
-      pump.qrCode = updated.qrCode;
     }
 
     // Return the QR code as a PNG buffer
-    return QRCode.toBuffer(pump.qrCode);
+    return QRCode.toBuffer(qrToken);
   }
 }
