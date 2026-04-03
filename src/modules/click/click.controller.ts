@@ -1,8 +1,8 @@
-import { Controller, Post, Get, Delete, Param, ParseIntPipe, Body, Req, UseGuards } from '@nestjs/common';
+import { Controller, Post, Get, Delete, Param, ParseIntPipe, Body, Req, UseGuards, Res, HttpCode, HttpStatus } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiHeader } from '@nestjs/swagger';
 import { ClickService } from './click.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-import { Request } from 'express';
+import { Request, Response } from 'express';
 
 import { AddCardDto, VerifyCardDto, PayWithTokenDto } from '../../types/click/click.dto';
 
@@ -11,15 +11,47 @@ import { AddCardDto, VerifyCardDto, PayWithTokenDto } from '../../types/click/cl
 export class ClickController {
     constructor(private readonly clickService: ClickService) { }
 
-    // /click/invoice removed - no wallets to top up
-
-
-    // Click Webhook (Public, secured by Click MD5 signature)
-    @Post('callback')
-    @ApiOperation({ summary: 'Click Webhook for Prepare/Complete actions' })
+    // 1. Click Webhook: PREPARE
+    @Post('prepare')
+    @HttpCode(HttpStatus.OK)
+    @ApiOperation({ summary: 'Click Webhook for Prepare action' })
     @ApiHeader({ name: 'click_sign_string', description: 'MD5 hash from Click' })
-    async clickCallback(@Body() body: any) {
-        return this.clickService.handleCallback(body);
+    async clickPrepare(@Body() body: any, @Res() res: Response) {
+        try {
+            const result = await this.clickService.prepare(body);
+            this.logger('CLICK PREPARE', result);
+            res.set('Content-Type', 'application/x-www-form-urlencoded; charset=UTF-8')
+                .send(result);
+        } catch (e) {
+            res.set('Content-Type', 'application/x-www-form-urlencoded; charset=UTF-8')
+                .send({ error: -8, error_note: 'UNKNOWN ERROR' });
+        }
+    }
+
+    // 2. Click Webhook: COMPLETE
+    @Post('complete')
+    @HttpCode(HttpStatus.OK)
+    @ApiOperation({ summary: 'Click Webhook for Complete action' })
+    @ApiHeader({ name: 'click_sign_string', description: 'MD5 hash from Click' })
+    async clickComplete(@Body() body: any, @Res() res: Response) {
+        try {
+            const result = await this.clickService.complete(body);
+            this.logger('CLICK COMPLETE', result);
+            res.set('Content-Type', 'application/x-www-form-urlencoded; charset=UTF-8')
+                .send(result);
+        } catch (e) {
+            res.set('Content-Type', 'application/x-www-form-urlencoded; charset=UTF-8')
+                .send({ error: -8, error_note: 'UNKNOWN ERROR' });
+        }
+    }
+
+    @Get('transactions')
+    @UseGuards(JwtAuthGuard)
+    @ApiBearerAuth()
+    @ApiOperation({ summary: 'Get user payment transactions history' })
+    async getTransactions(@Req() req: Request) {
+        const userId = (req as any).user.sub;
+        return this.clickService.getTransactions(userId);
     }
 
     @Get('cards')
@@ -65,5 +97,11 @@ export class ClickController {
     async deleteCard(@Req() req: Request, @Param('id', ParseIntPipe) cardId: number) {
         const userId = (req as any).user.sub;
         return this.clickService.deleteCard(userId, cardId);
+    }
+
+    private logger(title: string, data: any) {
+        console.log(`================ ${title} RESPONSE ================`);
+        console.log(data);
+        console.log('========================================================');
     }
 }

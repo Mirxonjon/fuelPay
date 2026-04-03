@@ -32,6 +32,7 @@ import { CreateFuelSessionDto } from '@/types/fuel-session/create-fuel-session.d
 import { UpdateFuelSessionDto } from '@/types/fuel-session/update-fuel-session.dto';
 import { FilterFuelSessionDto } from '@/types/fuel-session/filter-fuel-session.dto';
 import { RemoteStartSessionDto } from '@/types/fuel-session/remote-start-session.dto';
+import { UpdateFuelSessionStatusDto } from '@/types/fuel-session/update-fuel-session-status.dto';
 
 import { Request } from 'express';
 
@@ -71,13 +72,13 @@ export class FuelSessionController {
     return this.service.remoteStopSession(userId, id);
   }
 
-  // ADMIN create for any user
-  @Post('admin')
-  @Roles('ADMIN')
+  // CASHIER create for any user
+  @Post('cashier')
+  @Roles('CASHIER')
   @HttpCode(HttpStatus.CREATED)
-  @ApiOperation({ summary: 'Create fuel session (ADMIN for any user)' })
+  @ApiOperation({ summary: 'Create fuel session (CASHIER for any user)' })
   @ApiBody({ type: CreateFuelSessionDto })
-  adminCreate(@Body() dto: CreateFuelSessionDto) {
+  cashierCreate(@Body() dto: CreateFuelSessionDto) {
     return this.service.adminCreate(dto);
   }
 
@@ -139,6 +140,18 @@ export class FuelSessionController {
     @Query('paymentId') paymentId?: number
   ) {
     return this.service.confirmSession(id, paymentId);
+  }
+
+  // CASHIER update status
+  @Patch(':id/status')
+  @Roles('CASHIER')
+  @ApiOperation({ summary: 'Update fuel session status (CASHIER only)' })
+  @ApiBody({ type: UpdateFuelSessionStatusDto })
+  async updateStatus(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: UpdateFuelSessionStatusDto
+  ) {
+    return this.service.updateStatus(id, dto.status);
   }
 
   // USER get own by id

@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ForbiddenException,
   Inject,
   Injectable,
@@ -46,6 +47,39 @@ export class FuelSessionService {
     }
   }
   async createForUser(userId: number, dto: CreateFuelSessionDto) {
+    let status = dto.status ?? SessionStatus.PENDING;
+
+    // 1. If paymentId is provided, verify it
+    if (dto.paymentId) {
+      const transaction = await this.prisma.paymentTransaction.findUnique({
+        where: { id: dto.paymentId },
+      });
+
+      if (!transaction) {
+        throw new BadRequestException('To\'lov ma\'lumotlari topilmadi (Payment not found)');
+      }
+
+      if (transaction.userId !== userId) {
+        throw new ForbiddenException('Ushbu to\'lov sizga tegishli emas (Payment does not belong to you)');
+      }
+
+      if (transaction.status !== PaymentStatus.SUCCESS) {
+        throw new BadRequestException('To\'lov hali tasdiqlanmagan (Payment not successful)');
+      }
+
+      // Check if this payment is already linked to another session
+      const existingSession = await this.prisma.fuelSession.findFirst({
+        where: { paymentId: dto.paymentId },
+      });
+
+      if (existingSession) {
+        throw new BadRequestException('Ushbu to\'lov allaqachon ishlatilgan (Payment already used)');
+      }
+
+      // If valid, set status directly to CONFIRMED (Accepted)
+      status = SessionStatus.CONFIRMED;
+    }
+
     return this.prisma.fuelSession.create({
       data: {
         userId,
@@ -57,7 +91,7 @@ export class FuelSessionService {
         pricePerUnit: dto.pricePerUnit ?? 0,
         totalAmount: dto.totalAmount ?? 0,
         paymentId: dto.paymentId,
-        status: dto.status ?? SessionStatus.PENDING,
+        status,
         startTime: dto.startTime ? new Date(dto.startTime) : new Date(),
       },
     });
@@ -369,5 +403,26 @@ export class FuelSessionService {
     } catch (e) {
       throw new ForbiddenException(`Failed to connect to station: ${e.message}`);
     }
+  }
+
+  async updateStatus(id: number, status: SessionStatus) {
+    const session = await this.adminFindOne(id);
+
+    if (status === SessionStatus.DISPENSING) {
+      if (session.status !== SessionStatus.CONFIRMED) {
+        throw new BadRequestException('Faqat tasdiqlangan seanslarni yoqilg\'i quyish bosqichiga o\'tkazish mumkin (Only CONFIRMED sessions can be moved to DISPENSING)');
+      }
+    }
+
+    if (status === SessionStatus.CANCELLED) {
+      if (session.status === SessionStatus.COMPLETED) {
+        throw new BadRequestException('Yakunlangan seansni bekor qilib bo\'lmaydi (Completed session cannot be cancelled)');
+      }
+    }
+
+    return this.prisma.fuelSession.update({
+      where: { id },
+      data: { status },
+    });
   }
 }
