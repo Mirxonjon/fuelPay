@@ -296,7 +296,7 @@ export class ClickService {
             service_id: parseInt(SERVICE_ID),
             card_token: card.token,
             amount: amount,
-            merchant_trans_id: tx.id.toString(),
+            transaction_parameter: tx.id.toString(),
         };
 
         try {
