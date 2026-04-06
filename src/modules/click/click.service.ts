@@ -51,21 +51,34 @@ export class ClickService {
     // 2. Click Webhook: PREPARE (action=0)
     async prepare(data: any) {
         const { click_trans_id, merchant_trans_id, amount, action } = data;
+        this.logger.log(`Processing Click Prepare: click_trans_id=${click_trans_id}, merchant_trans_id=${merchant_trans_id}, amount=${amount}`);
 
         if (!this.validateSignature(data, 0)) {
-            this.logger.error('Invalid signature for Click Prepare', { received: data.sign_string });
+            this.logger.error(`Invalid signature for Click Prepare: click_trans_id=${click_trans_id}`);
             return { error: -1, error_note: 'SIGN CHECK FAILED' };
         }
 
         const txId = parseInt(merchant_trans_id);
-        if (isNaN(txId)) return { error: -5, error_note: 'INVALID MERCHANT TRANS ID' };
+        if (isNaN(txId)) {
+            this.logger.error(`Invalid merchant_trans_id: ${merchant_trans_id}`);
+            return { error: -5, error_note: 'INVALID MERCHANT TRANS ID' };
+        }
 
         const transaction = await this.prisma.paymentTransaction.findUnique({
             where: { id: txId },
         });
 
-        if (!transaction) return { error: -6, error_note: 'TRANSACTION NOT FOUND' };
-        if (transaction.amount !== parseFloat(amount)) return { error: -2, error_note: 'INVALID AMOUNT' };
+        if (!transaction) {
+            this.logger.error(`Transaction not found: ${txId}`);
+            return { error: -6, error_note: 'TRANSACTION NOT FOUND' };
+        }
+
+        if (transaction.amount !== parseFloat(amount)) {
+            this.logger.error(`Amount mismatch: expected ${transaction.amount}, received ${amount}`);
+            return { error: -2, error_note: 'INVALID AMOUNT' };
+        }
+
+        this.logger.log(`Click Prepare Success: ${txId}`);
 
         return {
             click_trans_id,
@@ -79,9 +92,10 @@ export class ClickService {
     // 3. Click Webhook: COMPLETE (action=1)
     async complete(data: any) {
         const { click_trans_id, merchant_trans_id, amount, error, action, merchant_prepare_id } = data;
+        this.logger.log(`Processing Click Complete: click_trans_id=${click_trans_id}, merchant_trans_id=${merchant_trans_id}, error=${error}`);
 
         if (!this.validateSignature(data, 1)) {
-            this.logger.error('Invalid signature for Click Complete', { received: data.sign_string });
+            this.logger.error(`Invalid signature for Click Complete: click_trans_id=${click_trans_id}`);
             return { error: -1, error_note: 'SIGN CHECK FAILED' };
         }
 
@@ -91,9 +105,13 @@ export class ClickService {
             include: { FuelSession: true }
         });
 
-        if (!transaction) return { error: -6, error_note: 'TRANSACTION NOT FOUND' };
+        if (!transaction) {
+            this.logger.error(`Transaction not found in Complete: ${txId}`);
+            return { error: -6, error_note: 'TRANSACTION NOT FOUND' };
+        }
 
         if (transaction.status === PaymentStatus.SUCCESS) {
+            this.logger.warn(`Transaction already paid: ${txId}`);
             return { error: -4, error_note: 'ALREADY PAID' };
         }
 
@@ -152,11 +170,13 @@ export class ClickService {
     // 5. SECURE CARD SAVING: ADD CARD
     async createCardToken(userId: number, cardNumber: string, expireDate: string) {
         const { SERVICE_ID } = this.ENV;
+        this.logger.log(`User ${userId} creating card token for card ending in ${this.getLast4(cardNumber)}`);
 
         const existing = await this.prisma.card.findFirst({
             where: { userId, last4: this.getLast4(cardNumber) }
         });
         if (existing && existing.isActive) {
+            this.logger.warn(`Card already saved for user ${userId}: last4=${existing.last4}`);
             throw new BadRequestException('Card already saved');
         }
 
@@ -167,14 +187,17 @@ export class ClickService {
         };
 
         try {
+            this.logger.log(`Calling Click API to request card token for user ${userId}`);
             const res = await fetch(`${this.CLICK_API_URL}/request`, {
                 method: 'POST',
                 headers: this.getAuthHeaders(),
                 body: JSON.stringify(payload),
             });
             const data = await res.json() as any;
+            this.logger.log(`Click Card Request Response: ${JSON.stringify(data)}`);
 
             if (data.error_code !== 0) {
+                this.logger.error(`Click card registration failed: ${data.error_note}`);
                 throw new BadRequestException(data.error_note || 'Card registration failed');
             }
 
@@ -191,9 +214,10 @@ export class ClickService {
                 },
             });
 
+            this.logger.log(`Card record upserted for user ${userId}: cardId=${card.id}`);
             return { success: true, message: 'SMS code sent', phone: data.phone_number, cardId: card.id };
         } catch (e) {
-            this.logger.error('Click Add Card Error', e);
+            this.logger.error(`Click Add Card Error: ${e.message}`);
             throw new HttpException(e.message, HttpStatus.BAD_REQUEST);
         }
     }
@@ -201,9 +225,11 @@ export class ClickService {
     // 6. VERIFY SMS CODE
     async verifyCardToken(userId: number, cardId: number, smsCode: string) {
         const { SERVICE_ID } = this.ENV;
+        this.logger.log(`User ${userId} verifying cardId ${cardId}`);
 
         const card = await this.prisma.card.findUnique({ where: { id: cardId } });
         if (!card || card.userId !== userId) {
+            this.logger.error(`Card not found or access denied: user=${userId}, cardId=${cardId}`);
             throw new BadRequestException('Card not found');
         }
 
@@ -214,14 +240,17 @@ export class ClickService {
         };
 
         try {
+            this.logger.log(`Calling Click API to verify card token for user ${userId}`);
             const res = await fetch(`${this.CLICK_API_URL}/verify`, {
                 method: 'POST',
                 headers: this.getAuthHeaders(),
                 body: JSON.stringify(payload),
             });
             const data = await res.json() as any;
+            this.logger.log(`Click Card Verify Response: ${JSON.stringify(data)}`);
 
             if (data.error_code !== 0) {
+                this.logger.error(`Click card verification failed: ${data.error_note}`);
                 throw new BadRequestException(data.error_note || 'Card verification failed');
             }
 
@@ -230,9 +259,10 @@ export class ClickService {
                 data: { isActive: true },
             });
 
+            this.logger.log(`Card ${cardId} verified and activated for user ${userId}`);
             return { success: true, message: 'Card verified successfully' };
         } catch (e) {
-            this.logger.error('Click Verify Card Error', e);
+            this.logger.error(`Click Verify Card Error: ${e.message}`);
             throw new HttpException(e.message, HttpStatus.BAD_REQUEST);
         }
     }
@@ -270,17 +300,22 @@ export class ClickService {
         };
 
         try {
+            const headers = this.getAuthHeaders();
+            this.logger.log(`[CLICK API REQUEST]: ${this.CLICK_API_URL}/payment | Headers: ${JSON.stringify(headers)} | Body: ${JSON.stringify(payload)}`);
+
             const res = await fetch(`${this.CLICK_API_URL}/payment`, {
                 method: 'POST',
-                headers: this.getAuthHeaders(),
+                headers,
                 body: JSON.stringify(payload),
             });
             const data = await res.json() as any;
-
+            console.log('================ CLICK PAY WITH TOKEN RESPONSE ================');
+            console.log(data);
+            console.log('=========================================================');
             if (data.error_code !== 0) {
                 await this.prisma.paymentTransaction.update({
                     where: { id: tx.id },
-                    data: { 
+                    data: {
                         status: PaymentStatus.FAILED,
                         errorCode: data.error_code.toString(),
                         errorMessage: data.error_note
@@ -291,7 +326,7 @@ export class ClickService {
 
             await this.prisma.paymentTransaction.update({
                 where: { id: tx.id },
-                data: { 
+                data: {
                     status: PaymentStatus.SUCCESS,
                     externalId: data.click_trans_id?.toString()
                 },
@@ -316,12 +351,20 @@ export class ClickService {
     async deleteCard(userId: number, cardId: number) {
         const card = await this.prisma.card.findUnique({ where: { id: cardId } });
 
+        this.logger.log(`User ${userId} attempting to delete card ${cardId}`);
+
         if (!card || card.userId !== userId) {
+            this.logger.error(`Card deletion failed: not found or access denied: user=${userId}, cardId=${cardId}`);
             throw new BadRequestException('Card not found or access denied');
         }
 
-        await this.prisma.card.delete({ where: { id: cardId } });
+        // Use soft delete by setting isActive to false to preserve transaction history
+        await this.prisma.card.update({
+            where: { id: cardId },
+            data: { isActive: false }
+        });
 
+        this.logger.log(`Card ${cardId} soft-deleted for user ${userId}`);
         return { success: true, message: 'Card deleted successfully' };
     }
 
