@@ -73,8 +73,9 @@ export class ClickService {
             return { error: -6, error_note: 'TRANSACTION NOT FOUND' };
         }
 
-        if (transaction.amount !== parseFloat(amount)) {
-            this.logger.error(`Amount mismatch: expected ${transaction.amount}, received ${amount}`);
+        const expectedAmount = transaction.amount * 1.01;
+        if (Math.abs(expectedAmount - parseFloat(amount)) > 0.01) {
+            this.logger.error(`Amount mismatch: expected ${expectedAmount} (including 1% commission), received ${amount}`);
             return { error: -2, error_note: 'INVALID AMOUNT' };
         }
 
@@ -113,6 +114,12 @@ export class ClickService {
         if (transaction.status === PaymentStatus.SUCCESS) {
             this.logger.warn(`Transaction already paid: ${txId}`);
             return { error: -4, error_note: 'ALREADY PAID' };
+        }
+
+        const expectedAmount = transaction.amount * 1.01;
+        if (Math.abs(expectedAmount - parseFloat(amount)) > 0.01) {
+            this.logger.error(`Amount mismatch in Complete: expected ${expectedAmount} (including 1% commission), received ${amount}`);
+            return { error: -2, error_note: 'INVALID AMOUNT' };
         }
 
         const isSuccess = parseInt(error) === 0;
