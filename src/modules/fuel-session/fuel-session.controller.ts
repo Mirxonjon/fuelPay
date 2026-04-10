@@ -33,6 +33,7 @@ import { UpdateFuelSessionDto } from '@/types/fuel-session/update-fuel-session.d
 import { FilterFuelSessionDto } from '@/types/fuel-session/filter-fuel-session.dto';
 import { RemoteStartSessionDto } from '@/types/fuel-session/remote-start-session.dto';
 import { UpdateFuelSessionStatusDto } from '@/types/fuel-session/update-fuel-session-status.dto';
+import { CashierStatsFilterDto } from '@/types/fuel-session/cashier-stats-filter.dto';
 
 import { Request } from 'express';
 
@@ -90,6 +91,17 @@ export class FuelSessionController {
   getMyStats(@Req() req: Request) {
     const userId = (req as any).user.sub as number;
     return this.service.getUserStats(userId);
+  }
+
+  // CASHIER get station stats
+  @Get('cashier/stats')
+  @Roles('CASHIER')
+  @ApiOperation({
+    summary: 'Get fuel station statistics for cashier (revenue, volume, peak hours, top customers)',
+  })
+  getCashierStats(@Query() query: CashierStatsFilterDto, @Req() req: Request) {
+    const userId = (req as any).user.sub as number;
+    return this.service.getCashierStats(userId, query);
   }
 
   // USER list own

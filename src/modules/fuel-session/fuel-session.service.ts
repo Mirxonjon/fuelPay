@@ -15,6 +15,7 @@ import { SessionStatus, PaymentStatus } from '@prisma/client';
 import { OcppServer } from '../ocpp/ocpp.server';
 import { RemoteStartSessionDto } from '@/types/fuel-session/remote-start-session.dto';
 import { ClickService } from '../click/click.service';
+import { CashierStatsFilterDto } from '@/types/fuel-session/cashier-stats-filter.dto';
 
 @Injectable()
 export class FuelSessionService {
@@ -424,5 +425,133 @@ export class FuelSessionService {
       where: { id },
       data: { status },
     });
+  }
+
+  async getCashierStats(userId: number, filter: CashierStatsFilterDto) {
+    const { from, to, fuelStationId } = filter;
+
+    // 1. Get stations assigned to this cashier
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      include: { cashierStations: { select: { id: true } } }
+    });
+
+    const assignedStationIds = user?.cashierStations.map(s => s.id) || [];
+    
+    // 2. Filter by specific station if requested, else use all assigned
+    let targetStationIds = assignedStationIds;
+    if (fuelStationId) {
+      if (!assignedStationIds.includes(Number(fuelStationId))) {
+        throw new ForbiddenException('You are not assigned to this station');
+      }
+      targetStationIds = [Number(fuelStationId)];
+    }
+
+    if (targetStationIds.length === 0) {
+      return { totalRevenue: 0, totalVolume: 0, sessionCount: 0, message: 'No stations assigned' };
+    }
+
+    // 3. Define the query scope
+    const where: any = {
+      fuelStationId: { in: targetStationIds },
+      status: SessionStatus.COMPLETED
+    };
+
+    if (from || to) {
+      where.startTime = {};
+      if (from) where.startTime.gte = new Date(from);
+      if (to) where.startTime.lte = new Date(to);
+    } else {
+      // Default to last 30 days if no range provided
+      const thirtyDaysAgo = new Date();
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+      where.startTime = { gte: thirtyDaysAgo };
+    }
+
+    // 4. Fetch the data
+    const sessions = await this.prisma.fuelSession.findMany({
+      where,
+      include: {
+        fuelType: { select: { name: true, unit: true, category: true } },
+        fuelPump: { select: { fuelPumpNumber: true } },
+        payment: { select: { provider: true, method: true } },
+        user: { select: { id: true, phone: true, firstName: true, lastName: true } }
+      },
+      orderBy: { startTime: 'desc' }
+    });
+
+    // 5. Initial stats
+    let totalRevenue = 0;
+    let totalVolume = 0;
+    const byFuelType: Record<string, { quantity: number; amount: number; unit: string }> = {};
+    const byPump: Record<string, { quantity: number; amount: number; count: number }> = {};
+    const dailySales: Record<string, { amount: number; quantity: number }> = {};
+    const peakHours: Record<number, number> = {}; // Hour (0-23) -> Count
+    const topCustomers: Record<number, { amount: number; count: number; name: string; phone: string }> = {};
+    const paymentMethods: Record<string, { amount: number; count: number }> = {};
+
+    for (const s of sessions) {
+      totalRevenue += s.totalAmount;
+      totalVolume += s.quantity;
+
+      // Group by Fuel Type
+      const fuelName = s.fuelType?.name || 'Unknown';
+      const unit = s.fuelType?.unit || s.unit;
+      if (!byFuelType[fuelName]) byFuelType[fuelName] = { quantity: 0, amount: 0, unit };
+      byFuelType[fuelName].quantity += s.quantity;
+      byFuelType[fuelName].amount += s.totalAmount;
+
+      // Group by Pump
+      const pumpNum = s.fuelPump?.fuelPumpNumber || 0;
+      const pumpLabel = `Pump ${pumpNum}`;
+      if (!byPump[pumpLabel]) byPump[pumpLabel] = { quantity: 0, amount: 0, count: 0 };
+      byPump[pumpLabel].quantity += s.quantity;
+      byPump[pumpLabel].amount += s.totalAmount;
+      byPump[pumpLabel].count += 1;
+
+      // Daily Sales
+      const dateKey = s.startTime.toISOString().split('T')[0];
+      if (!dailySales[dateKey]) dailySales[dateKey] = { amount: 0, quantity: 0 };
+      dailySales[dateKey].amount += s.totalAmount;
+      dailySales[dateKey].quantity += s.quantity;
+
+      // Peak Hours
+      const hour = s.startTime.getHours();
+      peakHours[hour] = (peakHours[hour] || 0) + 1;
+
+      // Top Customers
+      const cid = s.userId;
+      if (!topCustomers[cid]) {
+        topCustomers[cid] = { 
+          amount: 0, 
+          count: 0, 
+          name: `${s.user.firstName || ''} ${s.user.lastName || ''}`.trim() || 'User',
+          phone: s.user.phone
+        };
+      }
+      topCustomers[cid].amount += s.totalAmount;
+      topCustomers[cid].count += 1;
+
+      // Payment Methods
+      const methodLabel = s.payment?.provider || s.payment?.method || 'OTHER';
+      if (!paymentMethods[methodLabel]) paymentMethods[methodLabel] = { amount: 0, count: 0 };
+      paymentMethods[methodLabel].amount += s.totalAmount;
+      paymentMethods[methodLabel].count += 1;
+    }
+
+    return {
+      overview: {
+        totalRevenue,
+        totalVolume,
+        sessionCount: sessions.length,
+        averageCheck: sessions.length > 0 ? totalRevenue / sessions.length : 0,
+      },
+      byFuelType,
+      byPump,
+      dailySales: Object.entries(dailySales).map(([date, val]) => ({ date, ...val })).sort((a, b) => a.date.localeCompare(b.date)),
+      peakHours: Object.entries(peakHours).map(([hour, count]) => ({ hour: parseInt(hour), count })).sort((a, b) => a.hour - b.hour),
+      topCustomers: Object.values(topCustomers).sort((a, b) => b.amount - a.amount).slice(0, 5),
+      paymentMethods,
+    };
   }
 }
