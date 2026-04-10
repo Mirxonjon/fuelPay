@@ -482,7 +482,7 @@ export class FuelSessionService {
 
     // 5. Initial stats
     let totalRevenue = 0;
-    let totalVolume = 0;
+    const totalByUnit: Record<string, number> = {}; // e.g. { LITRE: 240, M3: 45 }
     const byFuelType: Record<string, { quantity: number; amount: number; unit: string }> = {};
     const byPump: Record<string, { quantity: number; amount: number; count: number }> = {};
     const dailySales: Record<string, { amount: number; quantity: number }> = {};
@@ -492,12 +492,14 @@ export class FuelSessionService {
 
     for (const s of sessions) {
       totalRevenue += s.totalAmount;
-      totalVolume += s.quantity;
+
+      const unit = s.fuelType?.unit || s.unit;
+      totalByUnit[unit] = (totalByUnit[unit] || 0) + s.quantity;
 
       // Group by Fuel Type
       const fuelName = s.fuelType?.name || 'Unknown';
-      const unit = s.fuelType?.unit || s.unit;
-      if (!byFuelType[fuelName]) byFuelType[fuelName] = { quantity: 0, amount: 0, unit };
+      const fuelUnit = s.fuelType?.unit || s.unit;
+      if (!byFuelType[fuelName]) byFuelType[fuelName] = { quantity: 0, amount: 0, unit: fuelUnit };
       byFuelType[fuelName].quantity += s.quantity;
       byFuelType[fuelName].amount += s.totalAmount;
 
@@ -542,7 +544,7 @@ export class FuelSessionService {
     return {
       overview: {
         totalRevenue,
-        totalVolume,
+        totalByUnit,  // e.g. { LITRE: 240.5, M3: 45.3 }
         sessionCount: sessions.length,
         averageCheck: sessions.length > 0 ? totalRevenue / sessions.length : 0,
       },
