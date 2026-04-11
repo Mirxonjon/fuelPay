@@ -375,6 +375,47 @@ export class ClickService {
         return { success: true, message: 'Card deleted successfully' };
     }
 
+    // 9. MOCK PAYMENT FOR TESTING
+    async mockPay(userId: number, amount: number) {
+        if (amount <= 0) throw new BadRequestException('Invalid amount');
+
+        // Find or create a dummy card for this user to satisfy foreign key constraints
+        let card = await this.prisma.card.findFirst({
+            where: { userId, last4: '0000' }
+        });
+
+        if (!card) {
+            card = await this.prisma.card.create({
+                data: {
+                    userId,
+                    token: `mock_token_${userId}_${Date.now()}`,
+                    last4: '0000',
+                    isActive: true,
+                }
+            });
+        }
+
+        // Create a successful transaction immediately
+        const tx = await this.prisma.paymentTransaction.create({
+            data: {
+                cardId: card.id,
+                userId,
+                amount,
+                provider: 'CLICK_MOCK',
+                status: PaymentStatus.SUCCESS,
+                externalId: `mock_trans_${Date.now()}`,
+            },
+        });
+
+        return { 
+            success: true, 
+            message: 'Mock payment successful', 
+            paymentId: tx.id,
+            amount,
+            status: tx.status
+        };
+    }
+
     private getLast4(cardNumber: string) {
         return cardNumber.slice(-4);
     }

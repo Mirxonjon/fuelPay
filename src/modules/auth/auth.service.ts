@@ -400,6 +400,7 @@ export class AuthService {
         cashierStations: {
           select: { id: true, title: true, address: true, latitude: true, longitude: true },
         },
+        telegramSetting: true,
       },
     });
     if (!user) return null as any;
@@ -413,6 +414,7 @@ export class AuthService {
       role: user.role?.name,
       createdAt: user.createdAt,
       stations: user.cashierStations?.length > 0 ? user.cashierStations : undefined,
+      telegramSetting: user.telegramSetting,
     };
   }
 

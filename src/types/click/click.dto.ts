@@ -44,3 +44,11 @@ export class PayWithTokenDto {
     @Min(1000)
     amount: number;
 }
+
+export class MockPayDto {
+    @ApiProperty({ description: 'Amount to simulate payment in UZS', example: 50000 })
+    @IsNotEmpty()
+    @IsNumber()
+    @Min(100)
+    amount: number;
+}

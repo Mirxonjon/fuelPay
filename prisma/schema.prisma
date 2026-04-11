@@ -62,6 +62,7 @@ model User {
   Notification        Notification[]
   UserDevice          UserDevice[]
   cashierStations     FuelStation[]        @relation("CashierStation")
+  telegramSetting     TelegramSetting?
   createdAt           DateTime             @default(now())
   updatedAt           DateTime             @updatedAt
 }
@@ -438,6 +439,19 @@ model Card {
   updatedAt DateTime @updatedAt
 
   PaymentTransaction PaymentTransaction[]
+
+  @@index([userId])
+}
+
+model TelegramSetting {
+  id              Int      @id @default(autoincrement())
+  userId          Int      @unique
+  user            User     @relation(fields: [userId], references: [id])
+  telegramId      String?
+  telegramGroupId String?
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
   @@index([userId])
 }

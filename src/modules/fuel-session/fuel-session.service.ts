@@ -16,6 +16,7 @@ import { OcppServer } from '../ocpp/ocpp.server';
 import { RemoteStartSessionDto } from '@/types/fuel-session/remote-start-session.dto';
 import { ClickService } from '../click/click.service';
 import { CashierStatsFilterDto } from '@/types/fuel-session/cashier-stats-filter.dto';
+import { TelegramService } from '../telegram/telegram.service';
 
 @Injectable()
 export class FuelSessionService {
@@ -24,7 +25,8 @@ export class FuelSessionService {
     private notificationService: NotificationService,
     @Inject(forwardRef(() => OcppServer))
     private ocppServer: OcppServer,
-    private clickService: ClickService
+    private clickService: ClickService,
+    private telegramService: TelegramService
   ) { }
 
   public async processAutoPayment(sessionId: number) {
@@ -41,6 +43,21 @@ export class FuelSessionService {
         await this.prisma.fuelSession.update({
           where: { id: sessionId },
           data: { paymentId: result.transactionId }
+        });
+
+        // Trigger Telegram notification
+        const sessionWithDetails = await this.prisma.fuelSession.findUnique({
+          where: { id: sessionId },
+          include: {
+            fuelType: { select: { name: true } },
+            fuelPump: { select: { fuelPumpNumber: true } }
+          }
+        });
+        await this.telegramService.notifyStationCashiers(session.fuelStationId, {
+          amount: session.totalAmount,
+          transactionId: result.transactionId?.toString() || session.id.toString(),
+          fuelName: sessionWithDetails?.fuelType?.name || 'Yoqilg\'i',
+          pumpNum: sessionWithDetails?.fuelPump?.fuelPumpNumber || 0
         });
       }
     } catch (e) {
@@ -81,7 +98,7 @@ export class FuelSessionService {
       status = SessionStatus.CONFIRMED;
     }
 
-    return this.prisma.fuelSession.create({
+    const session = await this.prisma.fuelSession.create({
       data: {
         userId,
         fuelStationId: dto.fuelStationId,
@@ -95,7 +112,22 @@ export class FuelSessionService {
         status,
         startTime: dto.startTime ? new Date(dto.startTime) : new Date(),
       },
+      include: {
+        fuelType: { select: { name: true } },
+        fuelPump: { select: { fuelPumpNumber: true } }
+      }
     });
+
+    if (status === SessionStatus.CONFIRMED) {
+      this.telegramService.notifyStationCashiers(session.fuelStationId, {
+        amount: session.totalAmount,
+        transactionId: session.paymentId?.toString() || session.id.toString(),
+        fuelName: session.fuelType?.name || 'Yoqilg\'i',
+        pumpNum: session.fuelPump?.fuelPumpNumber || 0
+      }).catch(err => console.error('Telegram notification failed:', err));
+    }
+
+    return session;
   }
 
   async adminCreate(dto: CreateFuelSessionDto) {

@@ -31,6 +31,7 @@ import { FuelTypeModule } from './modules/fuel-type/fuel-type.module';
 import { OcppModule } from './modules/ocpp/ocpp.module';
 import { SocketModule } from './modules/socket/socket.module';
 import { ClickModule } from './modules/click/click.module';
+import { TelegramModule } from './modules/telegram/telegram.module';
 @Module({
   imports: [
     ConfigModule.forRoot({
@@ -66,6 +67,7 @@ import { ClickModule } from './modules/click/click.module';
     OcppModule,
     SocketModule,
     ClickModule,
+    TelegramModule,
   ],
   providers: [
     {

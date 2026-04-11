@@ -1,10 +1,10 @@
 import { Controller, Post, Get, Delete, Param, ParseIntPipe, Body, Req, UseGuards, Res, HttpCode, HttpStatus, Logger } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiBearerAuth, ApiHeader } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiBearerAuth, ApiHeader, ApiBody } from '@nestjs/swagger';
 import { ClickService } from './click.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { Request, Response } from 'express';
 
-import { AddCardDto, VerifyCardDto, PayWithTokenDto } from '../../types/click/click.dto';
+import { AddCardDto, VerifyCardDto, PayWithTokenDto, MockPayDto } from '../../types/click/click.dto';
 
 @ApiTags('Click Payments')
 @Controller('click')
@@ -106,5 +106,16 @@ export class ClickController {
         const userId = (req as any).user.sub;
         this.loggerInternal.log(`User ${userId} requested to delete card: ${cardId}`);
         return this.clickService.deleteCard(userId, cardId);
+    }
+
+    @Post('mock-pay')
+    @UseGuards(JwtAuthGuard)
+    @ApiBearerAuth()
+    @ApiOperation({ summary: 'MOCK PAYMENT: Simulate a successful Click payment for testing (DEV ONLY)' })
+    @ApiBody({ type: MockPayDto })
+    async mockPay(@Req() req: Request, @Body() dto: MockPayDto) {
+        const userId = (req as any).user.sub;
+        this.loggerInternal.log(`MOCK PAYMENT: User ${userId} simulating success for ${dto.amount} UZS`);
+        return this.clickService.mockPay(userId, dto.amount);
     }
 }
