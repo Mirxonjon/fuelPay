@@ -57,6 +57,15 @@ export class CreateFuelSessionDto {
   @IsInt()
   paymentId?: number;
 
+  @ApiPropertyOptional({
+    example: 1,
+    description: 'Saved Click card ID to charge. If omitted, the user\'s most recently added active card is used.',
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  cardId?: number;
+
   @ApiPropertyOptional({ enum: SessionStatus, default: SessionStatus.PENDING })
   @IsOptional()
   @IsEnum(SessionStatus)

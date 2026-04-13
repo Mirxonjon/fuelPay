@@ -34,6 +34,7 @@ import { FilterFuelSessionDto } from '@/types/fuel-session/filter-fuel-session.d
 import { RemoteStartSessionDto } from '@/types/fuel-session/remote-start-session.dto';
 import { UpdateFuelSessionStatusDto } from '@/types/fuel-session/update-fuel-session-status.dto';
 import { CashierStatsFilterDto } from '@/types/fuel-session/cashier-stats-filter.dto';
+import { PayAndCreateSessionDto } from '@/types/fuel-session/pay-and-create-session.dto';
 
 import { Request } from 'express';
 
@@ -52,6 +53,20 @@ export class FuelSessionController {
   create(@Body() dto: CreateFuelSessionDto, @Req() req: Request) {
     const userId = (req as any).user.sub as number;
     return this.service.createForUser(userId, dto);
+  }
+
+  // ATOMIC: pay with saved Click card AND create fuel session in ONE request
+  @Post('pay-and-create')
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({
+    summary: 'Atomically charge saved card and create fuel session (single API)',
+    description:
+      'Accepts cardId, amount and session details. Creates the session in PENDING, charges the Click card, then confirms. On payment failure the session is marked CANCELLED — paymentId is never lost.',
+  })
+  @ApiBody({ type: PayAndCreateSessionDto })
+  payAndCreate(@Body() dto: PayAndCreateSessionDto, @Req() req: Request) {
+    const userId = (req as any).user.sub as number;
+    return this.service.payAndCreate(userId, dto);
   }
 
   // TRIGGER REMOTE START

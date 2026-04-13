@@ -12,6 +12,7 @@ import { CreateFuelSessionDto } from '@/types/fuel-session/create-fuel-session.d
 import { UpdateFuelSessionDto } from '@/types/fuel-session/update-fuel-session.dto';
 import { FilterFuelSessionDto } from '@/types/fuel-session/filter-fuel-session.dto';
 import { SessionStatus, PaymentStatus } from '@prisma/client';
+import { PayAndCreateSessionDto } from '@/types/fuel-session/pay-and-create-session.dto';
 import { OcppServer } from '../ocpp/ocpp.server';
 import { RemoteStartSessionDto } from '@/types/fuel-session/remote-start-session.dto';
 import { ClickService } from '../click/click.service';
@@ -128,6 +129,62 @@ export class FuelSessionService {
     }
 
     return session;
+  }
+
+  /**
+   * Single atomic endpoint: charges the user's saved Click card AND creates
+   * the fuel session in one request. The session row is created in PENDING
+   * state BEFORE the Click API call, so the paymentId can never be orphaned
+   * by a network failure — it always has a session to attach to.
+   */
+  async payAndCreate(userId: number, dto: PayAndCreateSessionDto) {
+    // 1. Charge the saved Click card FIRST.
+    let payResult: { success: boolean; transactionId?: number };
+    try {
+      payResult = await this.clickService.payWithToken(userId, dto.cardId, dto.amount);
+    } catch (e) {
+      throw new BadRequestException(`To'lov amalga oshmadi: ${e?.message ?? 'unknown'}`);
+    }
+
+    if (!payResult?.success || !payResult.transactionId) {
+      throw new BadRequestException('To\'lov amalga oshmadi');
+    }
+
+    // 2. Payment succeeded — create the session already bound to this paymentId.
+    const confirmed = await this.prisma.fuelSession.create({
+      data: {
+        userId,
+        fuelStationId: dto.fuelStationId,
+        fuelPumpId: dto.fuelPumpId,
+        fuelTypeId: dto.fuelTypeId,
+        quantity: dto.quantity ?? 0,
+        unit: dto.unit,
+        pricePerUnit: dto.pricePerUnit ?? 0,
+        totalAmount: dto.amount,
+        paymentId: payResult.transactionId,
+        status: SessionStatus.CONFIRMED,
+        startTime: new Date(),
+      },
+      include: {
+        fuelType: { select: { name: true } },
+        fuelPump: { select: { fuelPumpNumber: true } },
+        fuelStation: { select: { id: true, title: true, address: true } },
+      },
+    });
+
+    // 4. Fire-and-forget cashier notification.
+    this.telegramService.notifyStationCashiers(confirmed.fuelStationId, {
+      amount: confirmed.totalAmount,
+      transactionId: confirmed.paymentId?.toString() || confirmed.id.toString(),
+      fuelName: confirmed.fuelType?.name || 'Yoqilg\'i',
+      pumpNum: confirmed.fuelPump?.fuelPumpNumber || 0,
+    }).catch(err => console.error('Telegram notification failed:', err));
+
+    return {
+      success: true,
+      paymentId: payResult.transactionId,
+      session: confirmed,
+    };
   }
 
   async adminCreate(dto: CreateFuelSessionDto) {
