@@ -191,6 +191,7 @@ export class ClickService {
             service_id: parseInt(SERVICE_ID),
             card_number: cardNumber,
             expire_date: expireDate,
+            temporary: 0,
         };
 
         try {
